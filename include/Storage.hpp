@@ -13,11 +13,11 @@ class Storage{
 private:
 protected:
 public:
-  virtual void open(const char *);
-  virtual void write(const char *);
+  virtual void open(const char *){}
+  virtual void write(const char *){}
   
-  virtual void close();
-  virtual bool isActive();
+  virtual void close(){}
+  virtual bool isActive(){}
 };
 
 /*
@@ -27,4 +27,4 @@ public:
  * output(s):	Storage, new instance of Storage
  * Author: 	Samuel Hild
  */
-Storage buildStorage(int storageType);
+Storage * buildStorage(int storageType);

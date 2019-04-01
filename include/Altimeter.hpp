@@ -1,11 +1,11 @@
 /*
  * header: 	Altimeter.h
- * description: 	The header file for Altimeter.c++, Includes interfaces, helper functions  and
+ * description:	The header file for Altimeter.c++, Includes interfaces, helper functions  and
  * 		subclasses
  * author: 	Samuel Hild
  */
 
-#define STANDARD_PRESSURE 1013.25
+
 
 /*
  * interface:	Altimeter
@@ -17,17 +17,17 @@ class Altimeter
 {
 private:
 protected:
-  static double initialAltitude = 0;
-  static double initialAltitude = 0;
-  static double seaLevelPressure = STANDARD_PRESSURE;
+  float initialAltitude;
+  float maxAltitude;
+  float seaLevelPressure;
 
 public:
-  virtual double readAltitude();
-  virtual double readTempurature();
-  virtual double readPressure();
+  virtual float readAltitude(){}
+  virtual float readTempurature(){}
+  virtual float readPressure(){}
 
-  virtual double getMaxAltitude();
-  virtual double getInitialAltitude();
+  virtual float getMaxAltitude(){}
+  virtual float getInitialAltitude(){}
 };
 
 /*
@@ -37,4 +37,4 @@ public:
  * output(s):	Altimeter, concreate altimeter instance
  * author:	Samuel Hild
  */
-Altimeter buildAltimeter(int altimeterType);
+Altimeter * buildAltimeter(int altimeterType);
