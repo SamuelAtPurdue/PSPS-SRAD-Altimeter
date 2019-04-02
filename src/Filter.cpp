@@ -1,13 +1,20 @@
-/* 
+/*
  * class:	Filter.hpp
  * description: provides the functions for filtering data
  * author: 	Samuel Hild
  */
 
-#include "../include/Filter.hpp"
-#include <iostream>
+#include <Filter.hpp>
+#define alpha 0.4
+#define beta 0.3
+#define gamma 0.2
+
+#define MEASUREMENT_UNCERTAINTY 5.704
+
 
 using namespace std;
+
+float kalmanGain(float measurementUncertainty, float previousEtimateUncertainty);
 
 /*
  * function:	preflightFilter()
@@ -39,7 +46,10 @@ float preflightFilter(int n, float previous, float next)
  * output(s):	float filtered, The new filtered value
  * author: 	Samuel Hild
  */
-float burnFilter(float previous, float next);
+float burnFilter(float previous, float next)
+{
+
+}
 
 /*
  * function:	ascentFilter()
@@ -81,3 +91,15 @@ float drogueFilter(float previous, float next);
  */
 float mainFilter(float previous, float next);
 
+/*
+ * function:  	kalmanGain()
+ * description:	calculates the kalman gain
+ * input(s):  	float measurementUncertainty, The measurementUncertainty
+ *	           	float previousEtimateUncertainty, The estimate uncertainty from the previous estimate
+ * output(s): 	float filtered, The new filtered value
+ * author:     	Samuel Hild
+ */
+float kalmanGain(float measurementUncertainty, float previousEtimateUncertainty)
+{
+  return previousEtimateUncertainty / (previousEtimateUncertainty + measurementUncertainty);
+}

@@ -1,5 +1,7 @@
-#include "../include/Altimeter.hpp"
-#include <iostream>
+#include <Altimeter.hpp>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP280.h>
+#include <SPI.h>
 
 #define ERRANT_PRSSURE 60373.94
 #define STD_PRESSURE 1013.25
@@ -11,37 +13,48 @@ using namespace std;
 class BmpAltimeter : public Altimeter
 {
 private:
+  Adafruit_BMP280 * bmp = new Adafruit_BMP280(BMP_CS);
 public:
   BmpAltimeter (float seaLevelPressure = STD_PRESSURE)
   {
     Altimeter::seaLevelPressure = seaLevelPressure;
     Altimeter::initialAltitude = 0;
     Altimeter::maxAltitude = 0;
-  
-    //TODO: BMP280 code
   }
 
-  float readAltitude()
+  bool startup() override
+  {
+    if (!bmp->begin())
+    {
+      Serial.println(bmp->readPressure());
+      Serial.println(bmp->readTemperature());
+      Serial.println(bmp->readAltitude(STD_PRESSURE));
+      return true;
+    }
+    return false;
+  }
+
+  float readAltitude() override
   {
     return 0;
   }
-  float readTempurature()
+  float readTempurature() override
   {
     return 0;
   }
-  float readPressure()
+  float readPressure() override
   {
-    return 0;
+    return bmp->readPressure();
   }
-  float getMaxAltitude()
+  float getMaxAltitude() override
   {
     return Altimeter::maxAltitude;
   }
-  float getInitialAltitude()
-{
+  float getInitialAltitude() override
+  {
     return Altimeter::initialAltitude;
   }
-  
+
 };
 
 class SimulatedAltimeter : public Altimeter
@@ -55,23 +68,23 @@ public:
     Altimeter::maxAltitude = 0;
   }
 
-  float readAltitude()
+  float readAltitude() override
   {
     return 0;
   }
-  float readTempurature()
+  float readTempurature() override
   {
     return 0;
   }
-  float readPressure()
+  float readPressure() override
   {
-    return 0;
+    return 2;
   }
-  float getMaxAltitude()
+  float getMaxAltitude() override
   {
     return Altimeter::maxAltitude;
   }
-  float getInitialAltitude()
+  float getInitialAltitude() override
   {
     return Altimeter::maxAltitude;
   }
@@ -88,7 +101,7 @@ Altimeter * buildAltimeter(int altimeterType)
     case 1:
       newAltimeter = new SimulatedAltimeter();
     default:
-      throw; 
+      ;// throw;
   }
 
   return newAltimeter;

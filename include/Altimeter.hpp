@@ -22,6 +22,7 @@ protected:
   float seaLevelPressure;
 
 public:
+  virtual bool startup(){}
   virtual float readAltitude(){}
   virtual float readTempurature(){}
   virtual float readPressure(){}
