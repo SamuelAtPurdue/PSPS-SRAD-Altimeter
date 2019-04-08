@@ -2,45 +2,40 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 #include <SPI.h>
+#include <Utility.hpp>
 
 #define ERRANT_PRSSURE 60373.94
 #define STD_PRESSURE 1013.25
-
-#define BMP_CS 10
 
 using namespace std;
 
 class BmpAltimeter : public Altimeter
 {
 private:
-  Adafruit_BMP280 * bmp = new Adafruit_BMP280(BMP_CS);
+  Adafruit_BMP280 * bmp;
+
 public:
   BmpAltimeter (float seaLevelPressure = STD_PRESSURE)
   {
     Altimeter::seaLevelPressure = seaLevelPressure;
     Altimeter::initialAltitude = 0;
     Altimeter::maxAltitude = 0;
+
+    bmp = new Adafruit_BMP280(BMPCS);
   }
 
   bool startup() override
   {
-    if (!bmp->begin())
-    {
-      Serial.println(bmp->readPressure());
-      Serial.println(bmp->readTemperature());
-      Serial.println(bmp->readAltitude(STD_PRESSURE));
-      return true;
-    }
-    return false;
+    return bmp->begin();
   }
 
   float readAltitude() override
   {
-    return 0;
+    return bmp->readAltitude(seaLevelPressure);
   }
-  float readTempurature() override
+  float readTemperature() override
   {
-    return 0;
+    return bmp->readTemperature();
   }
   float readPressure() override
   {
@@ -54,9 +49,13 @@ public:
   {
     return Altimeter::initialAltitude;
   }
-
 };
 
+/*
+ * class:       SimulatedAltimeter
+ * description: A concreate type of Altimeter for simulated flight
+ * author:      Samuel Hild
+ */
 class SimulatedAltimeter : public Altimeter
 {
 private:
@@ -68,13 +67,19 @@ public:
     Altimeter::maxAltitude = 0;
   }
 
+  bool startup()
+  {
+    debug ("Starting Simulated Altimeter");
+    return true;
+  }
+
   float readAltitude() override
   {
     return 0;
   }
-  float readTempurature() override
+  float readTemperature() override
   {
-    return 0;
+    return 1;
   }
   float readPressure() override
   {
@@ -90,19 +95,37 @@ public:
   }
 };
 
-Altimeter * buildAltimeter(int altimeterType)
+Altimeter buildAltimeter()
 {
-  Altimeter * newAltimeter;
+  debug("free ram");
+  Serial.println(freeRam());
 
-  switch (altimeterType)
+  Altimeter * newAltimeter = new BmpAltimeter();
+
+  while (!newAltimeter->startup())
   {
-    case 0:
-      newAltimeter = new BmpAltimeter();
-    case 1:
+    error("failed to start bmp altimeter");
+    if(digitalRead(LOOP_STOP) == HIGH)
+    {
+      Serial.println("[**] alert: interupt detected");
       newAltimeter = new SimulatedAltimeter();
-    default:
-      ;// throw;
+      newAltimeter->startup();
+
+      blink(LOOP_LED);
+
+      delay (1000);
+
+      break;
+    }
+    delay(STARTUP_DELAY);
   }
 
-  return newAltimeter;
+  delay (STARTUP_DELAY);
+  debug("altimeter startup complete");
+
+  Serial.println(String (newAltimeter->readPressure()) + " Pa");
+  Serial.println(String (newAltimeter->readTemperature()) + " C");
+  Serial.println(String (newAltimeter->readAltitude()) + " m");
+
+  return *newAltimeter;
 }

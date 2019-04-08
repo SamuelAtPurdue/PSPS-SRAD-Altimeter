@@ -22,9 +22,9 @@ protected:
   float seaLevelPressure;
 
 public:
-  virtual bool startup(){}
-  virtual float readAltitude(){}
-  virtual float readTempurature(){}
+  virtual bool startup() {}
+  virtual float readAltitude() {}
+  virtual float readTemperature(){}
   virtual float readPressure(){}
 
   virtual float getMaxAltitude(){}
@@ -34,8 +34,8 @@ public:
 /*
  * function: 	buildAltimeter()
  * description:	A factory function for creating an instance of Altimeter.
- * input(s):	int, altimeter type
+ * input(s):	void
  * output(s):	Altimeter, concreate altimeter instance
  * author:	Samuel Hild
  */
-Altimeter * buildAltimeter(int altimeterType);
+Altimeter buildAltimeter();

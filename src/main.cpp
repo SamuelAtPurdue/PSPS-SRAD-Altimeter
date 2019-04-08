@@ -4,31 +4,25 @@
  * Author:	      Samuel Hild
  */
 #include <Arduino.h>
+#include <SparkFunBQ27441.h>
+
 #include <Altimeter.hpp>
 #include <Filter.hpp>
 #include <Storage.hpp>
 #include <Utility.hpp>
 
-#define SDCS 4
-#define FRAMCS 9
-#define BMPCS 10
-#define MAIN_DEPLOY A1
-#define MAIN_READ A0
-#define DROGUE_DEPLOY A3
-#define DROGUE_READ A2
-#define BUZZER 3
-#define LOOP_STOP 2
-#define ERROR_LED 5
-#define LOOP_LED 6
-#define MAIN_LED 7
-#define DROGUE_LED 8
-
 using namespace std;
 
 void gpioSetup();
-int healthCheck1();
-void setupBattery();
-Altimeter altimeterStartup();
+bool healthCheck1();
+bool setupBattery();
+bool setupRadio();
+
+Altimeter altimeter;
+Storage primaryStorage;
+Storage secondaryStorage;
+Runmode current;
+bool programmingMode;
 
 
 /*
@@ -46,21 +40,77 @@ void setup()
   if (!healthCheck1())
     fatal("health check 1 failed");
 
-  Altimeter altimeter = altimeterStartup();
+  // setup battery
+  programmingMode = false;
+  while (!setupBattery())
+  {
+    error("failure to start battery");
+    if (digitalRead(LOOP_STOP) == HIGH)
+    {
+      Serial.println("[**] alert: interupt detected");
+      debug("programming mode active");
 
+      programmingMode = true;
+
+      blink(LOOP_LED);
+      blink(LOOP_LED);
+
+      delay(1000);
+      break;
+    }
+    delay (STARTUP_DELAY);
+  }
+
+  // Setup Altimeter
+  altimeter = buildAltimeter();
+
+  // Setup Storage
+  int i = 0;
+  do
+  {
+    primaryStorage = buildStorage(1);
+    delay (STARTUP_DELAY);
+  }while(primaryStorage.isActive() && i++ < STARTUP_CONST);
+
+  if (i >= STARTUP_CONST)
+    error("failure to start primary storage");
+
+  secondaryStorage = buildStorage(2);
+
+
+  digitalWrite(LOOP_LED, HIGH);
+  current = PREFLIGHT;
 }
 
 /*
  * function:	loop()
- * description:	simulated loop() function
+ * description:	main loop for all inflight actions
  * input(s):	void
  * output(s):	void
  * author:	Samuel Hild
  */
 void loop()
 {
+  digitalWrite(LOOP_LED, HIGH);
 
 
+  if (digitalRead(LOOP_STOP) == HIGH)
+  {
+    Serial.println("[**] alert: interupt detected");
+    digitalWrite(LOOP_LED, LOW);
+
+    primaryStorage.close();
+    secondaryStorage.close();
+
+    Serial.println("[**] alert: operations terminated");
+
+    blink(LOOP_LED);
+    blink(LOOP_LED);
+
+    for (;;);
+  }
+
+  delay (REFRESH_RATE);
 }
 
 /*
@@ -81,6 +131,8 @@ void gpioSetup()
 
   pinMode(MAIN_DEPLOY, OUTPUT);
   pinMode(DROGUE_DEPLOY, OUTPUT);
+
+  return;
 }
 
 /*
@@ -88,27 +140,23 @@ void gpioSetup()
  * description: Performs an initial health check of the system
  *
  */
-int healthCheck1()
+bool healthCheck1()
 {
   //Check continuity
-  Serial.print("Begin startup at time: ");
-  Serial.println(millis());
+  debug("begin startup");
 
   // Check Leds
   for (int i = 0; i < 4; i++)
   {
-    digitalWrite(ERROR_LED+i, HIGH);
-    delay(300);
-    digitalWrite(ERROR_LED+i, LOW);
-    delay(300);
+    blink(ERROR_LED + i);
   }
 
   float mainRead = analogRead(MAIN_READ);
 
-  Serial.print("Main Read: ");
+  debug("main read: ");
   Serial.println(mainRead);
 
-  if (mainRead < 200)
+  if (mainRead < 500)
   {
     digitalWrite(MAIN_LED, HIGH);
     error("main charge discontinuous");
@@ -116,26 +164,41 @@ int healthCheck1()
 
   float drogueRead = analogRead(DROGUE_READ);
 
-  Serial.print("Drogue Read: ");
+  debug("drogue read: ");
   Serial.println(drogueRead);
 
-  if (drogueRead < 200)
+  if (drogueRead < 500)
   {
     digitalWrite(DROGUE_LED, HIGH);
     error("drogue charge discontinuous");
   }
 
-  Serial.println("Health Check 1 complete");
+  debug("Health Check 1 complete");
 
-  return 1;
+  return true;
 }
 
-void batteryStartup()
+bool setupBattery()
 {
-  return;
-}
+  if(lipo.begin())
+  {
+    lipo.setCapacity(BATTERY_CAPACITY);
 
-Altimeter altimeterStartup()
-{
+    debug("battery startup successful");
+
+    debug("dump initial battery info");
+    Serial.print(lipo.voltage());
+    Serial.println("mV");
+
+    Serial.print(lipo.current(AVG));
+    Serial.println("mA");
+
+    Serial.print(lipo.capacity(REMAIN));
+    Serial.println("mAh");
+
+    return true;
+  }
+  else
+    return false;
 
 }
