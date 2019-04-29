@@ -21,7 +21,7 @@ class SdStorage : public Storage
 {
 private:
   File datafile;
-  bool active;
+  bool active = false;
 
 protected:
 public:
@@ -36,7 +36,7 @@ public:
 
     active = success && datafile;
 
-    return success;
+    return active;
   }
 
   void write(const char * data) override
@@ -52,6 +52,7 @@ public:
   {
     return active;
   }
+  ~SdStorage() {}
 };
 
 /*
@@ -63,26 +64,42 @@ class FramStorage : public Storage
 {
 private:
   Adafruit_FRAM_SPI fram = Adafruit_FRAM_SPI(FRAMCS);
+  uint32_t previousAddress = 0x01;
+  bool active = false;
+
 protected:
 public:
   FramStorage() {}
 
   bool open()
   {
-    return fram.begin();
+    return active = fram.begin();
   }
   void write(const char * data)
   {
 
+    fram.writeEnable(true);
+    for (int i = 0; i < sizeof(*data) / sizeof(char); i++)
+    {
+      if (!RADIO_ENABLE)
+      {
+        debug("writing data to FRAM");
+        Serial.println(*data + i);
+      }
+      previousAddress += sizeof(uint8_t);
+      fram.write8(previousAddress, *data+i);
+    }
+    fram.writeEnable(false);
   }
   void close()
   {
-
+    /* Not needed */
+    Serial.println("[??] warn: FramStorage::close() has no implementation");
   }
 
   bool isActive()
   {
-
+    return active;
   }
 };
 
@@ -101,11 +118,16 @@ Storage * buildStorage(int selection)
       Storage * primaryStorage = new SdStorage();
 
       if (primaryStorage->open())
+      {
         debug("sd startup successful");
+        return primaryStorage;
+      }
       else
+      {
         error("failed to start sd storage");
-
-      return primaryStorage;
+        return primaryStorage;
+      }
+      
 
     case 2:
       return new FramStorage();

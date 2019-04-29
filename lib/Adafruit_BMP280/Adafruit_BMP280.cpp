@@ -14,7 +14,6 @@
   BSD license, all text above must be included in any redistribution
  ***************************************************************************/
 #include "Arduino.h"
-#include <Wire.h>
 #include <SPI.h>
 #include "Adafruit_BMP280.h"
 
@@ -23,57 +22,37 @@
  PRIVATE FUNCTIONS
  ***************************************************************************/
 
-
-Adafruit_BMP280::Adafruit_BMP280()
-  : _cs(-1), _mosi(-1), _miso(-1), _sck(-1)
-{ }
-
 Adafruit_BMP280::Adafruit_BMP280(int8_t cspin)
   : _cs(cspin), _mosi(-1), _miso(-1), _sck(-1)
 { }
 
-Adafruit_BMP280::Adafruit_BMP280(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin)
-  : _cs(cspin), _mosi(mosipin), _miso(misopin), _sck(sckpin)
-{ }
 
 
 bool Adafruit_BMP280::begin(uint8_t a, uint8_t chipid) {
-  _i2caddr = a;
-
-  if (_cs == -1) {
-    // i2c
-    Wire.begin();
-  } else {
-    digitalWrite(_cs, HIGH);
-    pinMode(_cs, OUTPUT);
-
-    if (_sck == -1) {
-      // hardware SPI
-      SPI.begin();
-    } else {
-      // software SPI
-      pinMode(_sck, OUTPUT);
-      pinMode(_mosi, OUTPUT);
-      pinMode(_miso, INPUT);
-    }
+  if (_sck == -1) {
+    // hardware SPI
+    SPI.begin();
   }
-  
+  delay(500);
   Serial.println(read8(BMP280_REGISTER_CHIPID));
   if (read8(BMP280_REGISTER_CHIPID) != chipid)
+  {
+    SPI.end();
     return false;
+  }
   readCoefficients();
-  // write8(BMP280_REGISTER_CONTROL, 0x3F); /* needed? */
+
   setSampling();
   delay(100);
   return true;
 }
 
 void Adafruit_BMP280::setSampling(sensor_mode mode,
-		 sensor_sampling   tempSampling,
-		 sensor_sampling   pressSampling,
-		 sensor_filter     filter,
-		 standby_duration  duration) {
-     _measReg.mode     = mode;
+    sensor_sampling   tempSampling,
+    sensor_sampling   pressSampling,
+    sensor_filter     filter,
+    standby_duration  duration) {
+    _measReg.mode     = mode;
     _measReg.osrs_t   = tempSampling;
     _measReg.osrs_p   = pressSampling;
 
@@ -85,21 +64,7 @@ void Adafruit_BMP280::setSampling(sensor_mode mode,
 }
 
 uint8_t Adafruit_BMP280::spixfer(uint8_t x) {
-  if (_sck == -1)
-    return SPI.transfer(x);
-
-  // software spi
-  Serial.println("Software SPI");
-  uint8_t reply = 0;
-  for (int i=7; i>=0; i--) {
-    reply <<= 1;
-    digitalWrite(_sck, LOW);
-    digitalWrite(_mosi, x & (1<<i));
-    digitalWrite(_sck, HIGH);
-    if (digitalRead(_miso))
-      reply |= 1;
-  }
-  return reply;
+  return SPI.transfer(x);
 }
 
 /**************************************************************************/
@@ -109,21 +74,14 @@ uint8_t Adafruit_BMP280::spixfer(uint8_t x) {
 /**************************************************************************/
 void Adafruit_BMP280::write8(byte reg, byte value)
 {
-  if (_cs == -1) {
-    Wire.beginTransmission((uint8_t)_i2caddr);
-    Wire.write((uint8_t)reg);
-    Wire.write((uint8_t)value);
-    Wire.endTransmission();
-  } else {
-    if (_sck == -1)
-      SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-    digitalWrite(_cs, LOW);
-    spixfer(reg & ~0x80); // write, bit 7 low
-    spixfer(value);
-    digitalWrite(_cs, HIGH);
-    if (_sck == -1)
-      SPI.endTransaction();              // release the SPI bus
-  }
+  if (_sck == -1)
+    SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  digitalWrite(_cs, LOW);
+  spixfer(reg & ~0x80); // write, bit 7 low
+  spixfer(value);
+  digitalWrite(_cs, HIGH);
+  if (_sck == -1)
+    SPI.endTransaction();              // release the SPI bus
 }
 
 /**************************************************************************/
@@ -135,23 +93,15 @@ uint8_t Adafruit_BMP280::read8(byte reg)
 {
   uint8_t value;
 
-  if (_cs == -1) {
-    Wire.beginTransmission((uint8_t)_i2caddr);
-    Wire.write((uint8_t)reg);
-    Wire.endTransmission();
-    Wire.requestFrom((uint8_t)_i2caddr, (byte)1);
-    value = Wire.read();
+  if (_sck == -1)
+    SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  digitalWrite(_cs, LOW);
+  spixfer(reg | 0x80); // read, bit 7 high
+  value = spixfer(0);
+  digitalWrite(_cs, HIGH);
+  if (_sck == -1)
+    SPI.endTransaction();              // release the SPI bus
 
-  } else {
-    if (_sck == -1)
-      SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-    digitalWrite(_cs, LOW);
-    spixfer(reg | 0x80); // read, bit 7 high
-    value = spixfer(0);
-    digitalWrite(_cs, HIGH);
-    if (_sck == -1)
-      SPI.endTransaction();              // release the SPI bus
-  }
   return value;
 }
 
@@ -163,32 +113,23 @@ uint8_t Adafruit_BMP280::read8(byte reg)
 uint16_t Adafruit_BMP280::read16(byte reg)
 {
   uint16_t value;
+  if (_sck == -1)
+    SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  digitalWrite(_cs, LOW);
+  spixfer(reg | 0x80); // read, bit 7 high
+  value = (spixfer(0) << 8) | spixfer(0);
+  digitalWrite(_cs, HIGH);
+  if (_sck == -1)
+    SPI.endTransaction();              // release the SPI bus
 
-  if (_cs == -1) {
-    Wire.beginTransmission((uint8_t)_i2caddr);
-    Wire.write((uint8_t)reg);
-    Wire.endTransmission();
-    Wire.requestFrom((uint8_t)_i2caddr, (byte)2);
-    value = (Wire.read() << 8) | Wire.read();
-
-  } else {
-    if (_sck == -1)
-      SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-    digitalWrite(_cs, LOW);
-    spixfer(reg | 0x80); // read, bit 7 high
-    value = (spixfer(0) << 8) | spixfer(0);
-    digitalWrite(_cs, HIGH);
-    if (_sck == -1)
-      SPI.endTransaction();              // release the SPI bus
-  }
 
   return value;
 }
 
-uint16_t Adafruit_BMP280::read16_LE(byte reg) {
+uint16_t Adafruit_BMP280::read16_LE(byte reg) 
+{
   uint16_t temp = read16(reg);
   return (temp >> 8) | (temp << 8);
-
 }
 
 /**************************************************************************/
@@ -199,13 +140,11 @@ uint16_t Adafruit_BMP280::read16_LE(byte reg) {
 int16_t Adafruit_BMP280::readS16(byte reg)
 {
   return (int16_t)read16(reg);
-
 }
 
 int16_t Adafruit_BMP280::readS16_LE(byte reg)
 {
   return (int16_t)read16_LE(reg);
-
 }
 
 
@@ -218,34 +157,20 @@ uint32_t Adafruit_BMP280::read24(byte reg)
 {
   uint32_t value;
 
-  if (_cs == -1) {
-    Wire.beginTransmission((uint8_t)_i2caddr);
-    Wire.write((uint8_t)reg);
-    Wire.endTransmission();
-    Wire.requestFrom((uint8_t)_i2caddr, (byte)3);
+  if (_sck == -1)
+    SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  digitalWrite(_cs, LOW);
+  spixfer(reg | 0x80); // read, bit 7 high
 
-    value = Wire.read();
-    value <<= 8;
-    value |= Wire.read();
-    value <<= 8;
-    value |= Wire.read();
+  value = spixfer(0);
+  value <<= 8;
+  value |= spixfer(0);
+  value <<= 8;
+  value |= spixfer(0);
 
-  } else {
-    if (_sck == -1)
-      SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-    digitalWrite(_cs, LOW);
-    spixfer(reg | 0x80); // read, bit 7 high
-
-    value = spixfer(0);
-    value <<= 8;
-    value |= spixfer(0);
-    value <<= 8;
-    value |= spixfer(0);
-
-    digitalWrite(_cs, HIGH);
-    if (_sck == -1)
-      SPI.endTransaction();              // release the SPI bus
-  }
+  digitalWrite(_cs, HIGH);
+  if (_sck == -1)
+    SPI.endTransaction();              // release the SPI bus
 
   return value;
 }
@@ -331,7 +256,8 @@ float Adafruit_BMP280::readPressure(void) {
   return (float)p/256;
 }
 
-float Adafruit_BMP280::readAltitude(float seaLevelhPa) {
+float Adafruit_BMP280::readAltitude(float seaLevelhPa)
+{
   float altitude;
 
   float pressure = readPressure(); // in Si units for Pascal
@@ -341,27 +267,3 @@ float Adafruit_BMP280::readAltitude(float seaLevelhPa) {
 
   return altitude;
 }
-
-/**************************************************************************/
-/*!
-    @brief  Take a new measurement (only possible in forced mode)
-    !!!todo!!!
-*/
-/**************************************************************************/
-/*
-void Adafruit_BMP280::takeForcedMeasurement()
-{
-    // If we are in forced mode, the BME sensor goes back to sleep after each
-    // measurement and we need to set it to forced mode once at this point, so
-    // it will take the next measurement and then return to sleep again.
-    // In normal mode simply does new measurements periodically.
-    if (_measReg.mode == MODE_FORCED) {
-        // set to forced mode, i.e. "take next measurement"
-        write8(BMP280_REGISTER_CONTROL, _measReg.get());
-        // wait until measurement has been completed, otherwise we would read
-        // the values from the last measurement
-        while (read8(BMP280_REGISTER_STATUS) & 0x08)
-		delay(1);
-    }
-}
-*/

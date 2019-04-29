@@ -21,10 +21,14 @@ bool setupPrimaryStorage();
 bool setupSecondaryStorage();
 bool setupRadio();
 
+void writeData();
+
 Altimeter * altimeter;
 Storage * primaryStorage;
 Storage * secondaryStorage;
 Runmode current;
+
+bool programmingMode = false;
 
 /*
  * function:	     setup()
@@ -52,6 +56,8 @@ void setup()
       blink(LOOP_LED);
       blink(LOOP_LED);
 
+      programmingMode = true;
+
       delay(1000);
       break;
     }
@@ -61,10 +67,9 @@ void setup()
   // Setup Altimeter
   altimeter = buildAltimeter();
 
-  //setupPrimaryStorage();
+  setupPrimaryStorage();
 
-  secondaryStorage = buildStorage(2);
-
+  setupSecondaryStorage();
 
   digitalWrite(LOOP_LED, HIGH);
   current = PREFLIGHT;
@@ -80,7 +85,8 @@ void setup()
 void loop()
 {
   digitalWrite(LOOP_LED, HIGH);
-
+  writeData();
+  digitalWrite(LOOP_LED, LOW);
 
   if (digitalRead(LOOP_STOP) == HIGH)
   {
@@ -97,10 +103,6 @@ void loop()
 
     for (;;);
   }
-
-  Serial.println(altimeter->readAltitude());
-  Serial.println(altimeter->readPressure());
-
 
   delay (REFRESH_RATE);
 }
@@ -133,7 +135,7 @@ void setupGpio()
 /*
  * function:    healthCheck1()
  * description: Performs an initial health check of the system
- *
+ * 
  */
 bool healthCheck1()
 {
@@ -202,22 +204,68 @@ bool setupBattery()
 
     return true;
   }
-  else
-    return false;
-
+  return false;
 }
 
 
 bool setupPrimaryStorage()
 {
   // Setup Storage
-  int i = 0;
-  do
-  {
-    primaryStorage = buildStorage(1);
-    delay (STARTUP_DELAY);
-  }while(primaryStorage->isActive() && i++ < STARTUP_CONST);
+  primaryStorage = buildStorage(1);
+  delay (STARTUP_DELAY);
 
-  if (i >= STARTUP_CONST)
+  if (!primaryStorage->isActive())
+  {
     error("failure to start primary storage");
+    return false;
+  }
+
+  return true;
+}
+
+bool setupSecondaryStorage()
+{
+  secondaryStorage = buildStorage(2);
+  return true;
+}
+
+void writeData()
+{
+  String message =  (String(millis()) + ", ") + 
+                    (String(freeRam()) + ", ") + 
+                    (String(current) + ", ") + 
+                    (String(altimeter->readAltitude()) + ", ") +
+                    (String(altimeter->readPressure()) + ", ") + 
+                    (String(altimeter->readTemperature()) + ", ");
+  
+  if (!programmingMode)
+    message += (String(lipo.voltage()) + ", ")+(String(lipo.current(AVG)) + ", ") + (String(lipo.capacity(REMAIN)) + ", ");
+  message += (String(analogRead(MAIN_READ)) + ", ") + (String(analogRead(DROGUE_READ)) + ", \n");
+
+  if (primaryStorage->isActive())
+    primaryStorage->write(message.c_str());
+  else if (RADIO_ENABLE)
+    Serial.print(message);
+
+  uint32_t timestamp = millis();  
+  uint32_t altitude = altimeter->readAltitude();
+  uint16_t ram = freeRam();
+  uint8_t voltage = lipo.voltage();
+  uint8_t cont1 = analogRead(MAIN_READ) / 100;
+  uint8_t cont2 = analogRead(DROGUE_READ) / 100;
+
+  if (!RADIO_ENABLE)
+    debug("DATA PACKET");
+
+  Serial.print(timestamp);
+  Serial.print(altitude);
+  Serial.print(ram);
+  Serial.print(voltage);
+  Serial.print(cont1);
+  Serial.print(cont2);
+
+  if (!RADIO_ENABLE)
+    Serial.println();
+
+  return;
 }

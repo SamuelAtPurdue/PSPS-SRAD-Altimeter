@@ -275,39 +275,6 @@ boolean callback_makeDirPath(SdFile& parentDir, char *filePathComponent,
 }
 
 
-  /*
-
-boolean callback_openPath(SdFile& parentDir, char *filePathComponent, 
-			  boolean isLastComponent, void *object) {
-
-    Callback used to open a file specified by a filepath that may
-    specify one or more directories above it.
-
-    Expects the context object to be an instance of `SDClass` and
-    will use the `file` property of the instance to open the requested
-    file/directory with the associated file open mode property.
-
-    Always returns true if the directory traversal hasn't reached the
-    bottom of the directory heirarchy.
-
-    Returns false once the file has been opened--to prevent the traversal
-    from descending further. (This may be unnecessary.)
-
-  if (isLastComponent) {
-    SDClass *p_SD = static_cast<SDClass*>(object);
-    p_SD->file.open(parentDir, filePathComponent, p_SD->fileOpenMode);
-    if (p_SD->fileOpenMode == FILE_WRITE) {
-      p_SD->file.seekSet(p_SD->file.fileSize());
-    }
-    // TODO: Return file open result?
-    return false;
-  }
-  return true;
-}
-  */
-
-
-
 boolean callback_remove(SdFile& parentDir, char *filePathComponent, 
 			boolean isLastComponent, void *object) {
   if (isLastComponent) {
@@ -340,6 +307,9 @@ boolean SDClass::begin(uint8_t csPin, int8_t mosi, int8_t miso, int8_t sck) {
     Return true if initialization succeeds, false otherwise.
 
    */
+
+  delay(500);
+
   return card.init(SPI_HALF_SPEED, csPin, mosi, miso, sck) &&
          volume.init(card) &&
          root.openRoot(volume);
@@ -433,38 +403,60 @@ File SDClass::open(const char *filepath, uint8_t mode) {
 
    */
 
+  #define DEBUG 1
+  #define DEPRINT if(DEBUG)Serial.println 
+
   int pathidx;
 
+  delay (50);
+
   // do the interative search
+  DEPRINT("Searching File System");
   SdFile parentdir = getParentDir(filepath, &pathidx);
   // no more subdirs!
 
   filepath += pathidx;
 
-  if (! filepath[0]) {
+  if (! filepath[0]) 
+  {
     // it was the directory itself!
+    DEPRINT("selected file was directory");
     return File(parentdir, "/");
   }
 
+  DEPRINT("openning file");
   // Open the file itself
   SdFile file;
 
   // failed to open a subdir!
   if (!parentdir.isOpen())
+  {
+    DEPRINT("failed to open sub dir");
     return File();
-
+  }
   // there is a special case for the Root directory since its a static dir
-  if (parentdir.isRoot()) {
-    if ( ! file.open(root, filepath, mode)) {
+  DEPRINT("checking if file is in root dir");
+  if (parentdir.isRoot()) 
+  {
+    DEPRINT("file in root dir\nchecking if openned");
+    if ( ! file.open(root, filepath, mode)) 
+    {
       // failed to open the file :(
+      DEPRINT("failed to open file");
       return File();
     }
     // dont close the root!
-  } else {
-    if ( ! file.open(parentdir, filepath, mode)) {
+  } 
+  else 
+  {
+    DEPRINT("file not in root");
+    if ( ! file.open(parentdir, filepath, mode)) 
+    {
+      DEPRINT("failed to open file");
       return File();
     }
     // close the parent
+    DEPRINT("closing dir");
     parentdir.close();
   }
 
@@ -474,50 +466,7 @@ File SDClass::open(const char *filepath, uint8_t mode) {
 }
 
 
-/*
-File SDClass::open(char *filepath, uint8_t mode) {
-  //
 
-     Open the supplied file path for reading or writing.
-
-     The file content can be accessed via the `file` property of
-     the `SDClass` object--this property is currently
-     a standard `SdFile` object from `sdfatlib`.
-
-     Defaults to read only.
-
-     If `write` is true, default action (when `append` is true) is to
-     append data to the end of the file.
-
-     If `append` is false then the file will be truncated first.
-
-     If the file does not exist and it is opened for writing the file
-     will be created.
-
-     An attempt to open a file for reading that does not exist is an
-     error.
-
-   //
-
-  // TODO: Allow for read&write? (Possibly not, as it requires seek.)
-
-  fileOpenMode = mode;
-  walkPath(filepath, root, callback_openPath, this);
-
-  return File();
-
-}
-*/
-
-
-//boolean SDClass::close() {
-//  /*
-//
-//    Closes the file opened by the `open` method.
-//
-//   */
-//  file.close();
-//}
 
 
 boolean SDClass::exists(char *filepath) {
@@ -529,16 +478,6 @@ boolean SDClass::exists(char *filepath) {
   return walkPath(filepath, root, callback_pathExists);
 }
 
-
-//boolean SDClass::exists(char *filepath, SdFile& parentDir) {
-//  /*
-//
-//     Returns true if the supplied file path rooted at `parentDir`
-//     exists.
-//
-//   */
-//  return walkPath(filepath, parentDir, callback_pathExists);
-//}
 
 
 boolean SDClass::mkdir(char *filepath) {
@@ -613,7 +552,6 @@ File File::openNextFile(uint8_t mode) {
     }
   }
 
-  //Serial.println("nothing");
   return File();
 }
 

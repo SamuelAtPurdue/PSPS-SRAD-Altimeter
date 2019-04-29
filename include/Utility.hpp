@@ -23,8 +23,9 @@
 
 #define REFRESH_RATE 5
 #define STARTUP_DELAY 15
-#define STARTUP_CONST 10
+#define STARTUP_CONST 1
 #define BATTERY_CAPACITY 500
+#define PACKET_SIZE 104
 
 #define RADIO_ENABLE 1
 
