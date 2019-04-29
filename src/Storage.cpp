@@ -10,7 +10,7 @@
 #include <Utility.hpp>
 #include <Adafruit_FRAM_SPI.h>
 
-#define FILENAME "data.csv"
+#define FILENAME "data.txt"
 
 /*
  * interface:	  SdStorage
@@ -36,10 +36,10 @@ public:
 
     active = success && datafile;
 
-    return active;
+    return success;
   }
 
-  void write(String data) override
+  void write(const char * data) override
   {
     datafile.print(data);
   }
@@ -71,10 +71,17 @@ public:
   {
     return fram.begin();
   }
-  void write(String data)
+  void write(const char * data)
   {
-    char * cdata = data.c_str();
 
+  }
+  void close()
+  {
+
+  }
+
+  bool isActive()
+  {
 
   }
 };
@@ -86,7 +93,7 @@ public:
  * output(s):	  Storage, new instance of Storage
  * Author: 	    Samuel Hild
  */
-Storage buildStorage(int selection)
+Storage * buildStorage(int selection)
 {
   switch (selection)
   {
@@ -94,14 +101,14 @@ Storage buildStorage(int selection)
       Storage * primaryStorage = new SdStorage();
 
       if (primaryStorage->open())
-        Serial.println("sd startup successful");
+        debug("sd startup successful");
       else
         error("failed to start sd storage");
 
-      return * primaryStorage;
+      return primaryStorage;
 
     case 2:
-      return *(new Storage());
+      return new FramStorage();
     default:
       fatal("unknown storage device");
   }

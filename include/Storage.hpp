@@ -15,11 +15,11 @@ class Storage{
 private:
 protected:
 public:
-  virtual bool open(){}
-  virtual void write(String){}
+  virtual bool open() = 0;
+  virtual void write(const char *) = 0;
 
-  virtual void close(){}
-  virtual bool isActive(){}
+  virtual void close() = 0;
+  virtual bool isActive() = 0;
 };
 
 /*
@@ -29,4 +29,4 @@ public:
  * output(s):	  Storage, new instance of Storage
  * Author: 	    Samuel Hild
  */
-Storage buildStorage(int selection);
+Storage * buildStorage(int selection);

@@ -57,10 +57,10 @@ bool Adafruit_BMP280::begin(uint8_t a, uint8_t chipid) {
       pinMode(_miso, INPUT);
     }
   }
-
+  
+  Serial.println(read8(BMP280_REGISTER_CHIPID));
   if (read8(BMP280_REGISTER_CHIPID) != chipid)
     return false;
-
   readCoefficients();
   // write8(BMP280_REGISTER_CONTROL, 0x3F); /* needed? */
   setSampling();
@@ -89,7 +89,7 @@ uint8_t Adafruit_BMP280::spixfer(uint8_t x) {
     return SPI.transfer(x);
 
   // software spi
-  //Serial.println("Software SPI");
+  Serial.println("Software SPI");
   uint8_t reply = 0;
   for (int i=7; i>=0; i--) {
     reply <<= 1;

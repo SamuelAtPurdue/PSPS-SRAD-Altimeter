@@ -26,6 +26,8 @@
 #define STARTUP_CONST 10
 #define BATTERY_CAPACITY 500
 
+#define RADIO_ENABLE 1
+
 /*
  * enum:        Runmode
  * description: provides the runmode for performing specified actions and flight checks
@@ -33,10 +35,10 @@
  */
 enum Runmode {PREFLIGHT, BURN, ASCENT, APOGEE, DROGUE, MAIN, POSTFLIGHT};
 
-void fatal (String);
-void error (String);
-void alert (String);
-void debug (String);
+void fatal (const char *);
+void error (const char *);
+void alert (const char *);
+void debug (const char *);
 
 void blink(int);
 

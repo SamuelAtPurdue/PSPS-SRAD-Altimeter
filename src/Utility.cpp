@@ -1,47 +1,115 @@
 #include <Utility.hpp>
-#include <Arduino.h>
 
-#define ERROR_LED 5
-
-void fatal(String message)
+/*
+ * function:    fatal
+ * description: display fatal error and halt the system
+ * input(s):    const char * message, the error message to display
+ * output(s):   void
+ * author:      Samuel Hild
+ */
+void fatal (const char * message)
 {
-  Serial.println(String(millis()) + " - [!!] FATAL: " + message);
-  Serial.println(String(millis()) + " - [!!] HALTING PROGRAM OPPERATION");
+  if (RADIO_ENABLE)
+  {
+    unsigned long time = millis();    // time for the messages
 
+    // display error message
+    Serial.print(time);
+    Serial.print(" - [!!] FATAL: ");
+    Serial.println(message);
+
+    // display the serial output
+    Serial.print(time);
+    Serial.println(" - [!!] HALTING PROGRAM OPPERATION");
+  }
+
+  // display fatal error on the led display
   digitalWrite(ERROR_LED, HIGH);
 
-  for (;;);
+  for (;;);   // halt the system
 
   return;
 }
 
-void error (String message)
+/*
+ * function:    fatal
+ * description: display fatal error and halt the system
+ * input(s):    const char * message, the error message to display
+ * output(s):   void
+ * author:      Samuel Hild
+ */
+void error (const char * message)
 {
-  Serial.print(String(millis()));
-  Serial.println(" - [!!] err: " + message);
-
+  // display error message
+  if (RADIO_ENABLE)
+  {
+    Serial.print(millis());
+    Serial.print(" - [!!] err: ");
+    Serial.println(message);
+  }
+  // blink ERROR_LED twice
   blink(ERROR_LED);
   blink(ERROR_LED);
 
   return;
 }
 
+/*
+ * function:    alert
+ * description: displays an alert to the serial monitor 
+ * input(s):    const char * message, the message to display
+ * output(s):   void 
+ * author:      Samuel Hild
+ */
+void alert(const char * message)
+{
+  // display alert message
+  if (RADIO_ENABLE)
+  {
+    Serial.print(millis());
+    Serial.print(" - [**] alert: ");
+    Serial.println(message);
+  }
+
+  return;
+}
+
+/*
+ * function:    debug
+ * description: displays a debug message to the serial monitor 
+ * input(s):    const char * message, the message to display
+ * output(s):   void 
+ * author:      Samuel Hild
+ */
+void debug(const char * message)
+{
+  // display debug message
+  if (RADIO_ENABLE)
+  {
+    Serial.print(millis());
+    Serial.print(" - [@@] debug: ");
+    Serial.println(message);
+  }
+  return;
+}
+
+/*
+ * function:    blink
+ * description: blinks an led
+ * input(s):    the led to blink
+ * output(s):   void
+ * author:      Samuel Hild
+ */ 
 void blink(int led)
 {
   digitalWrite(led, HIGH);
-  delay(150);
+  delay(100);
   digitalWrite(led, LOW);
-  delay(150);
+  delay(100);
 
   return;
 }
 
-void debug(String message)
-{
-  Serial.println(String(millis()) + " - [@@] debug: " + message);
-  delay(STARTUP_DELAY);
-  return;
-}
 
 /*
  * function:    freeRam()

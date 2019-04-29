@@ -1,13 +1,11 @@
+#include <Utility.hpp>
 #include <Altimeter.hpp>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 #include <SPI.h>
-#include <Utility.hpp>
 
 #define ERRANT_PRSSURE 60373.94
 #define STD_PRESSURE 1013.25
-
-using namespace std;
 
 class BmpAltimeter : public Altimeter
 {
@@ -17,10 +15,12 @@ private:
 public:
   BmpAltimeter (float seaLevelPressure = STD_PRESSURE)
   {
+    // set initial values
     Altimeter::seaLevelPressure = seaLevelPressure;
     Altimeter::initialAltitude = 0;
     Altimeter::maxAltitude = 0;
 
+    // create new instance of Adafruit_BMP280
     bmp = new Adafruit_BMP280(BMPCS);
   }
 
@@ -75,15 +75,15 @@ public:
 
   float readAltitude() override
   {
-    return 0;
+    return 15;
   }
   float readTemperature() override
   {
-    return 1;
+    return 16;
   }
   float readPressure() override
   {
-    return 2;
+    return 17;
   }
   float getMaxAltitude() override
   {
@@ -95,10 +95,20 @@ public:
   }
 };
 
-Altimeter buildAltimeter()
+/*
+ * function:    buildAltimeter
+ * description: builds a new Altimeter object 
+ * input(s):    void
+ * outputs(s):  new Altimeter object
+ * author:      Samuel Hild
+ */
+Altimeter * buildAltimeter()
 {
-  debug("free ram");
-  Serial.println(freeRam());
+  if (RADIO_ENABLE)
+  {
+    debug("free ram");
+    Serial.println(freeRam());
+  }
 
   Altimeter * newAltimeter = new BmpAltimeter();
 
@@ -107,25 +117,36 @@ Altimeter buildAltimeter()
     error("failed to start bmp altimeter");
     if(digitalRead(LOOP_STOP) == HIGH)
     {
-      Serial.println("[**] alert: interupt detected");
-      newAltimeter = new SimulatedAltimeter();
+      alert("interupt detected");
+
+      delete newAltimeter;
+
+      Altimeter * newAltimeter = new SimulatedAltimeter();
       newAltimeter->startup();
 
       blink(LOOP_LED);
 
-      delay (1000);
+      delay (500);
 
       break;
     }
+
     delay(STARTUP_DELAY);
   }
 
   delay (STARTUP_DELAY);
   debug("altimeter startup complete");
 
-  Serial.println(String (newAltimeter->readPressure()) + " Pa");
-  Serial.println(String (newAltimeter->readTemperature()) + " C");
-  Serial.println(String (newAltimeter->readAltitude()) + " m");
+  if (RADIO_ENABLE)
+  {
+    Serial.print(newAltimeter->readPressure());
+    Serial.println(" Pa");
 
-  return *newAltimeter;
+    Serial.print(newAltimeter->readTemperature());
+    Serial.println(" C");
+
+    Serial.print(newAltimeter->readAltitude());
+    Serial.println(" m");
+  }
+  return newAltimeter;
 }

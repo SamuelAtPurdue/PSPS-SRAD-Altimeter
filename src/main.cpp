@@ -3,27 +3,28 @@
  * description:	  main file for execution
  * Author:	      Samuel Hild
  */
-#include <Arduino.h>
+#include <Utility.hpp>
 #include <SparkFunBQ27441.h>
 
 #include <Altimeter.hpp>
 #include <Filter.hpp>
 #include <Storage.hpp>
-#include <Utility.hpp>
 
-using namespace std;
 
-void gpioSetup();
 bool healthCheck1();
+bool healthCheck2();
+
+void setupGpio();
 bool setupBattery();
+bool setupAltimeter();
+bool setupPrimaryStorage();
+bool setupSecondaryStorage();
 bool setupRadio();
 
-Altimeter altimeter;
-Storage primaryStorage;
-Storage secondaryStorage;
+Altimeter * altimeter;
+Storage * primaryStorage;
+Storage * secondaryStorage;
 Runmode current;
-bool programmingMode;
-
 
 /*
  * function:	     setup()
@@ -35,22 +36,18 @@ bool programmingMode;
 void setup()
 {
   Serial.begin(9600);
-  gpioSetup();
+  setupGpio();
 
-  if (!healthCheck1())
-    fatal("health check 1 failed");
+  if (!healthCheck1()) fatal("health check 1 failed");
 
   // setup battery
-  programmingMode = false;
   while (!setupBattery())
   {
     error("failure to start battery");
     if (digitalRead(LOOP_STOP) == HIGH)
     {
-      Serial.println("[**] alert: interupt detected");
+      alert ("interupt detected");
       debug("programming mode active");
-
-      programmingMode = true;
 
       blink(LOOP_LED);
       blink(LOOP_LED);
@@ -64,16 +61,7 @@ void setup()
   // Setup Altimeter
   altimeter = buildAltimeter();
 
-  // Setup Storage
-  int i = 0;
-  do
-  {
-    primaryStorage = buildStorage(1);
-    delay (STARTUP_DELAY);
-  }while(primaryStorage.isActive() && i++ < STARTUP_CONST);
-
-  if (i >= STARTUP_CONST)
-    error("failure to start primary storage");
+  //setupPrimaryStorage();
 
   secondaryStorage = buildStorage(2);
 
@@ -96,13 +84,13 @@ void loop()
 
   if (digitalRead(LOOP_STOP) == HIGH)
   {
-    Serial.println("[**] alert: interupt detected");
+    alert ("interupt detected");
     digitalWrite(LOOP_LED, LOW);
 
-    primaryStorage.close();
-    secondaryStorage.close();
+    primaryStorage->close();
+    secondaryStorage->close();
 
-    Serial.println("[**] alert: operations terminated");
+    alert ("operations terminated");
 
     blink(LOOP_LED);
     blink(LOOP_LED);
@@ -110,17 +98,21 @@ void loop()
     for (;;);
   }
 
+  Serial.println(altimeter->readAltitude());
+  Serial.println(altimeter->readPressure());
+
+
   delay (REFRESH_RATE);
 }
 
 /*
- * function:	  gpioSetup()
+ * function:	  setupGpio()
  * description:	sets up gpio display
  * input(s):	  void
  * output(s):	  void
  * author:	    Samuel Hild
  */
-void gpioSetup()
+void setupGpio()
 {
   pinMode(LOOP_STOP, INPUT);
 
@@ -131,6 +123,9 @@ void gpioSetup()
 
   pinMode(MAIN_DEPLOY, OUTPUT);
   pinMode(DROGUE_DEPLOY, OUTPUT);
+
+  pinMode(SDCS, OUTPUT);
+  pinMode(BMPCS, OUTPUT);
 
   return;
 }
@@ -153,8 +148,11 @@ bool healthCheck1()
 
   float mainRead = analogRead(MAIN_READ);
 
-  debug("main read: ");
-  Serial.println(mainRead);
+  if (RADIO_ENABLE)
+  {
+    debug("main read: ");
+    Serial.println(mainRead);
+  }
 
   if (mainRead < 500)
   {
@@ -164,8 +162,11 @@ bool healthCheck1()
 
   float drogueRead = analogRead(DROGUE_READ);
 
-  debug("drogue read: ");
-  Serial.println(drogueRead);
+  if (RADIO_ENABLE)
+  {
+    debug("drogue read: ");
+    Serial.println(drogueRead);
+  }
 
   if (drogueRead < 500)
   {
@@ -186,19 +187,37 @@ bool setupBattery()
 
     debug("battery startup successful");
 
-    debug("dump initial battery info");
-    Serial.print(lipo.voltage());
-    Serial.println("mV");
+    if (RADIO_ENABLE)
+    {
+      debug("dump initial battery info");
+      Serial.print(lipo.voltage());
+      Serial.println("mV");
 
-    Serial.print(lipo.current(AVG));
-    Serial.println("mA");
+      Serial.print(lipo.current(AVG));
+      Serial.println("mA");
 
-    Serial.print(lipo.capacity(REMAIN));
-    Serial.println("mAh");
+      Serial.print(lipo.capacity(REMAIN));
+      Serial.println("mAh");
+    }
 
     return true;
   }
   else
     return false;
 
+}
+
+
+bool setupPrimaryStorage()
+{
+  // Setup Storage
+  int i = 0;
+  do
+  {
+    primaryStorage = buildStorage(1);
+    delay (STARTUP_DELAY);
+  }while(primaryStorage->isActive() && i++ < STARTUP_CONST);
+
+  if (i >= STARTUP_CONST)
+    error("failure to start primary storage");
 }
