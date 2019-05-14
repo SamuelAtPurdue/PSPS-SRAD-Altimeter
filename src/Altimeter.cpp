@@ -11,6 +11,7 @@ class BmpAltimeter : public Altimeter
 {
 private:
   Adafruit_BMP280 * bmp;
+  float previousReading;
 
 public:
   BmpAltimeter (float seaLevelPressure = STD_PRESSURE)
@@ -26,19 +27,35 @@ public:
 
   bool startup() override
   {
-    return bmp->begin();
+    bool success = bmp->begin();
+    if (success)
+      initialAltitude = readAltitude();
+
+    return success;
   }
 
   float readAltitude() override
   {
-    return bmp->readAltitude(seaLevelPressure);
+    // Flush Previous Reading
+    bmp->readAltitude(seaLevelPressure);
+
+    // Assign the maximum reached altitude
+    previousReading = bmp->readAltitude(seaLevelPressure);
+    if (previousReading > Altimeter::maxAltitude)
+      Altimeter::maxAltitude = previousReading;
+
+    return previousReading;
   }
   float readTemperature() override
   {
+    bmp->readTemperature();
+
     return bmp->readTemperature();
   }
   float readPressure() override
   {
+    bmp->readPressure();
+
     return bmp->readPressure();
   }
   float getMaxAltitude() override
@@ -69,7 +86,7 @@ public:
 
   bool startup()
   {
-    debug ("Starting Simulated Altimeter");
+    debug (F("Starting Simulated Altimeter"));
     return true;
   }
 
@@ -106,7 +123,7 @@ Altimeter * buildAltimeter()
 {
   if (RADIO_ENABLE)
   {
-    debug("free ram");
+    debug(F("free ram"));
     Serial.println(freeRam());
   }
 
@@ -114,14 +131,13 @@ Altimeter * buildAltimeter()
 
   while (!newAltimeter->startup())
   {
-    error("failed to start bmp altimeter");
+    error(F("failed to start bmp altimeter"));
     if(digitalRead(LOOP_STOP) == HIGH)
     {
-      alert("interupt detected");
+      alert(F("interupt detected"));
 
-      delete newAltimeter;
 
-      Altimeter * newAltimeter = new SimulatedAltimeter();
+      newAltimeter = new SimulatedAltimeter();
       newAltimeter->startup();
 
       blink(LOOP_LED);
@@ -130,23 +146,27 @@ Altimeter * buildAltimeter()
 
       break;
     }
+    debug(F("free ram:"));
+
+    if (RADIO_ENABLE)
+      Serial.println(freeRam());
 
     delay(STARTUP_DELAY);
   }
 
   delay (STARTUP_DELAY);
-  debug("altimeter startup complete");
+  debug(F("altimeter startup complete"));
 
   if (RADIO_ENABLE)
   {
     Serial.print(newAltimeter->readPressure());
-    Serial.println(" Pa");
+    Serial.println(F(" Pa"));
 
     Serial.print(newAltimeter->readTemperature());
-    Serial.println(" C");
+    Serial.println(F(" C"));
 
     Serial.print(newAltimeter->readAltitude());
-    Serial.println(" m");
+    Serial.println(F(" m"));
   }
   return newAltimeter;
 }

@@ -31,4 +31,4 @@ public:
  * output(s):	  Storage, new instance of Storage
  * Author: 	    Samuel Hild
  */
-Storage * buildStorage(int selection);
+Storage * buildStorage(int selection = 0);

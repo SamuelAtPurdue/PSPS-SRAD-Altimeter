@@ -79,11 +79,11 @@ public:
   {
 
     fram.writeEnable(true);
-    for (int i = 0; i < sizeof(*data) / sizeof(char); i++)
+    for (unsigned int i = 0; i < sizeof(*data) / sizeof(char); i++)
     {
       if (!RADIO_ENABLE)
       {
-        debug("writing data to FRAM");
+        debug(F("writing data to FRAM"));
         Serial.println(*data + i);
       }
       previousAddress += sizeof(uint8_t);
@@ -94,7 +94,7 @@ public:
   void close()
   {
     /* Not needed */
-    Serial.println("[??] warn: FramStorage::close() has no implementation");
+    Serial.println(F("[??] warn: FramStorage::close() has no implementation"));
   }
 
   bool isActive()
@@ -112,26 +112,18 @@ public:
  */
 Storage * buildStorage(int selection)
 {
-  switch (selection)
+  Storage * newStorage;
+  if (selection == 1)
   {
-    case 1:
-      Storage * primaryStorage = new SdStorage();
+      newStorage = new SdStorage();
 
-      if (primaryStorage->open())
-      {
-        debug("sd startup successful");
-        return primaryStorage;
-      }
+      if (newStorage->open())
+        debug(F("sd startup successful"));
       else
-      {
-        error("failed to start sd storage");
-        return primaryStorage;
-      }
-      
-
-    case 2:
-      return new FramStorage();
-    default:
-      fatal("unknown storage device");
+        error(F("failed to start sd storage"));
   }
+  else
+    newStorage = new FramStorage();
+  
+  return newStorage;
 }

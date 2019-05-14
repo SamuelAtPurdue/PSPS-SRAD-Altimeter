@@ -1,4 +1,5 @@
 #include <Utility.hpp>
+#include <EEPROM.h>
 
 /*
  * function:    fatal
@@ -7,7 +8,7 @@
  * output(s):   void
  * author:      Samuel Hild
  */
-void fatal (const char * message)
+void fatal (const __FlashStringHelper * message)
 {
   if (RADIO_ENABLE)
   {
@@ -15,12 +16,12 @@ void fatal (const char * message)
 
     // display error message
     Serial.print(time);
-    Serial.print(" - [!!] FATAL: ");
+    Serial.print(F(" - [!!] FATAL: "));
     Serial.println(message);
 
     // display the serial output
     Serial.print(time);
-    Serial.println(" - [!!] HALTING PROGRAM OPPERATION");
+    Serial.println(F(" - [!!] HALTING PROGRAM OPPERATION"));
   }
 
   // display fatal error on the led display
@@ -32,19 +33,19 @@ void fatal (const char * message)
 }
 
 /*
- * function:    fatal
- * description: display fatal error and halt the system
+ * function:    error
+ * description: display error to serial monitor and led
  * input(s):    const char * message, the error message to display
  * output(s):   void
  * author:      Samuel Hild
  */
-void error (const char * message)
+void error (const __FlashStringHelper * message)
 {
   // display error message
   if (RADIO_ENABLE)
   {
     Serial.print(millis());
-    Serial.print(" - [!!] err: ");
+    Serial.print(F(" - [!!] err: "));
     Serial.println(message);
   }
   // blink ERROR_LED twice
@@ -61,13 +62,13 @@ void error (const char * message)
  * output(s):   void 
  * author:      Samuel Hild
  */
-void alert(const char * message)
+void alert(const __FlashStringHelper * message)
 {
   // display alert message
   if (RADIO_ENABLE)
   {
     Serial.print(millis());
-    Serial.print(" - [**] alert: ");
+    Serial.print(F(" - [**] alert: "));
     Serial.println(message);
   }
 
@@ -81,13 +82,13 @@ void alert(const char * message)
  * output(s):   void 
  * author:      Samuel Hild
  */
-void debug(const char * message)
+void debug(const __FlashStringHelper * message)
 {
   // display debug message
   if (RADIO_ENABLE)
   {
     Serial.print(millis());
-    Serial.print(" - [@@] debug: ");
+    Serial.print(F(" - [@@] debug: "));
     Serial.println(message);
   }
   return;
@@ -124,4 +125,41 @@ int freeRam()
   extern int __heap_start, *__brkval;
   int v;
   return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+}
+
+/*
+ * function:    dataToCStr
+ * description: Converts the data struct to a c string
+ *              I like to think this function doesn't exist
+ * input(s):    collectedData * data, the data to convert to string
+ * output(s):   const char * message, the data converted to a string
+ * author:      Samuel Hild
+ */
+const char * dataToCStr(collectedData * data)
+{
+  // Given more time I would perfer not to use arduino strings for this task
+  // but I decided the potential performance risks were worth the time saved
+  // by using them.
+  String temp = (String(data->timestamp) + ",") + 
+                (String(data->altitude) + ",") + 
+                (String(data->pressure) + ",") + 
+                (String(data->tempurature) + ",") +
+                (String(data->ram) + ",") +
+                (String(data->mainVoltage) + ",") +
+                (String(data->drogueVoltage) + ",") +
+                (String(data->lipoVoltage) + ",") +
+                (String(data->lipoCurrent) + ",") +
+                (String(data->lipoCapacity) + "\n");
+
+  const char * message = temp.c_str();
+
+  return message;
+}
+
+void clearEEPROM()
+{
+  for (unsigned int i = 0; i < EEPROM.length(); i++)
+  {
+    EEPROM.write(i, 0);
+  }
 }

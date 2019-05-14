@@ -5,23 +5,25 @@
  */
 #include <Utility.hpp>
 #include <SparkFunBQ27441.h>
+#include <EEPROM.h>
 
 #include <Altimeter.hpp>
-#include <Filter.hpp>
 #include <Storage.hpp>
-
 
 bool healthCheck1();
 bool healthCheck2();
 
 void setupGpio();
 bool setupBattery();
-bool setupAltimeter();
 bool setupPrimaryStorage();
 bool setupSecondaryStorage();
 bool setupRadio();
 
-void writeData();
+void collectRaw(collectedData *);
+
+void writeData(collectedData *);
+void transmitTelemetry(collectedData *);
+void writeDataEEPROM(collectedData *);
 
 Altimeter * altimeter;
 Storage * primaryStorage;
@@ -29,6 +31,10 @@ Storage * secondaryStorage;
 Runmode current;
 
 bool programmingMode = false;
+collectedData previousData;
+collectedData currentData;
+collectedData predictedData;  //  Unused for now
+uint32_t liftoffTime = 0;
 
 /*
  * function:	     setup()
@@ -39,19 +45,21 @@ bool programmingMode = false;
  */
 void setup()
 {
-  Serial.begin(9600);
+  //Initial Setup
   setupGpio();
+  Serial.begin(9600);
 
-  if (!healthCheck1()) fatal("health check 1 failed");
+  if (!healthCheck1()) 
+    fatal (F("health check 1 failed"));
 
   // setup battery
   while (!setupBattery())
   {
-    error("failure to start battery");
+    error (F("failure to start battery"));
     if (digitalRead(LOOP_STOP) == HIGH)
     {
-      alert ("interupt detected");
-      debug("programming mode active");
+      alert (F("interupt detected"));
+      debug (F("programming mode active"));
 
       blink(LOOP_LED);
       blink(LOOP_LED);
@@ -72,31 +80,160 @@ void setup()
   setupSecondaryStorage();
 
   digitalWrite(LOOP_LED, HIGH);
-  current = PREFLIGHT;
+
+  // make initial reading
+  collectRaw(&previousData);
+  collectRaw(&currentData);
+
+  // Set Default Values
+  previousData.velocity = 0;
+  previousData.acceleration = 0;
+
+  currentData.velocity = 0;
+  currentData.acceleration = 0;
+
+  current = Runmode::PREFLIGHT;
 }
 
 /*
- * function:	loop()
- * description:	main loop for all inflight actions
- * input(s):	void
- * output(s):	void
- * author:	Samuel Hild
+ * function:	  loop()
+ * description: main loop for all inflight actions
+ * input(s):	  void
+ * output(s):	  void
+ * author:	    Samuel Hild
  */
 void loop()
 {
   digitalWrite(LOOP_LED, HIGH);
-  writeData();
-  digitalWrite(LOOP_LED, LOW);
+  
+  debug(F("loop begin"));
 
+  collectRaw(&currentData);
+  writeData(&currentData);
+  transmitTelemetry(&currentData);
+  
+  switch (current)
+  {
+    case Runmode::PREFLIGHT :
+      if ((currentData.altitude >= (altimeter->getInitialAltitude() + LAUNCH_ALTITUDE_THRESHOLD)) || 
+        (currentData.velocity >= LAUNCH_VELOCITY_THRESHOLD) || 
+        (currentData.acceleration >= LAUNCH_ACCELERATION_THRESHOLD))
+        {
+          liftoffTime = currentData.timestamp;
+          current = Runmode::BURN;  
+          break;    // Skips over the delay
+        }
+
+      delay (REFRESH_RATE*2);
+      break;
+    
+    case Runmode::BURN :
+      if (currentData.acceleration <= 0 || currentData.timestamp > (liftoffTime + BURN_TIME_THRESHOLD))
+      {
+        current = Runmode::ASCENT;
+      }
+
+      //TODO: Add FRAM Loop
+      break;
+
+    case Runmode::ASCENT :
+      if (currentData.velocity <= APOGEE_VELOCITY_THRESHOLD)
+      {
+        current = Runmode::APOGEE;
+      }
+      // TODO: Add FRAM loop
+      break;
+
+    case Runmode::APOGEE :
+      if (currentData.velocity <= 0)
+      {
+        // Deploy DROUGE
+        digitalWrite(DROGUE_DEPLOY, HIGH);
+        delay(DEPLOY_DELAY);
+        digitalWrite(DROGUE_DEPLOY, LOW);
+
+        if (analogRead(DROGUE_READ) > 500) 
+        {
+          error(F("deploy error detected drogue"));
+          digitalWrite(DROGUE_DEPLOY, HIGH);
+        }
+        
+        current = Runmode::DROGUE;
+      }
+
+      //TODO: FRAM
+      
+      break;
+
+    case Runmode::DROGUE :
+      if (currentData.altitude <= (MAIN_ALTITUDE_THRESHOLD + altimeter->getInitialAltitude()))
+      {
+        digitalWrite(DROGUE_LED, LOW);
+        digitalWrite(MAIN_DEPLOY, HIGH);
+        delay(DEPLOY_DELAY);
+        digitalWrite(MAIN_DEPLOY, LOW);
+
+        if (analogRead(MAIN_READ) > 500)
+        {
+          error(F("deploy error detected main"));
+          digitalWrite(MAIN_DEPLOY, HIGH);
+        }
+
+        current = Runmode::MAIN;
+      }
+
+      //TODO: FRAM
+
+      break;
+
+    case Runmode::MAIN :
+      if ((currentData.velocity >= ZERO_THRESHOLD) || currentData.altitude <= altimeter->getInitialAltitude())
+        current = Runmode::POSTFLIGHT;
+
+      break;
+
+    case Runmode::POSTFLIGHT :
+
+      // Safety Checks
+      digitalWrite(DROGUE_DEPLOY, LOW);
+      digitalWrite(MAIN_DEPLOY, LOW);
+
+      digitalWrite(DROGUE_LED, (analogRead(DROGUE_READ) < 500) ? HIGH : LOW);
+      digitalWrite(MAIN_LED, (analogRead(MAIN_READ) < 500) ? HIGH : LOW);
+
+      // final Reading
+      collectRaw(&currentData);
+      writeData(&currentData);
+      transmitTelemetry(&currentData);
+
+      // TODO: final fram reading
+
+      alert (F("end of flight detected"));
+      digitalWrite(LOOP_LED, LOW);
+
+      primaryStorage->close();
+
+      alert (F("operations terminated"));
+
+      blink(LOOP_LED);
+      blink(LOOP_LED);
+
+      for (;;);
+
+    default:
+      fatal(F("unknown runmode"));
+      break;
+  }
+
+  // Interupt Detection
   if (digitalRead(LOOP_STOP) == HIGH)
   {
-    alert ("interupt detected");
+    alert (F("interupt detected"));
     digitalWrite(LOOP_LED, LOW);
 
     primaryStorage->close();
-    secondaryStorage->close();
 
-    alert ("operations terminated");
+    alert (F("operations terminated"));
 
     blink(LOOP_LED);
     blink(LOOP_LED);
@@ -139,8 +276,18 @@ void setupGpio()
  */
 bool healthCheck1()
 {
-  //Check continuity
-  debug("begin startup");
+
+  debug(F("begin startup"));
+
+  debug(F("begin EEPROM dump"));
+
+  for (unsigned int i = 0; i < EEPROM.length(); i++)
+  {
+    Serial.print(F("0x"));
+    Serial.print(EEPROM.read(i), HEX);
+    Serial.print(F(" "));
+  }
+  Serial.println();
 
   // Check Leds
   for (int i = 0; i < 4; i++)
@@ -152,31 +299,31 @@ bool healthCheck1()
 
   if (RADIO_ENABLE)
   {
-    debug("main read: ");
+    debug(F("main read: "));
     Serial.println(mainRead);
   }
 
   if (mainRead < 500)
   {
     digitalWrite(MAIN_LED, HIGH);
-    error("main charge discontinuous");
+    error(F("main charge discontinuous"));
   }
 
   float drogueRead = analogRead(DROGUE_READ);
 
   if (RADIO_ENABLE)
   {
-    debug("drogue read: ");
+    debug(F("drogue read: "));
     Serial.println(drogueRead);
   }
 
   if (drogueRead < 500)
   {
     digitalWrite(DROGUE_LED, HIGH);
-    error("drogue charge discontinuous");
+    error(F("drogue charge discontinuous"));
   }
 
-  debug("Health Check 1 complete");
+  debug(F("Health Check 1 complete"));
 
   return true;
 }
@@ -187,11 +334,11 @@ bool setupBattery()
   {
     lipo.setCapacity(BATTERY_CAPACITY);
 
-    debug("battery startup successful");
+    debug(F("battery startup successful"));
 
     if (RADIO_ENABLE)
     {
-      debug("dump initial battery info");
+      debug(F("dump initial battery info"));
       Serial.print(lipo.voltage());
       Serial.println("mV");
 
@@ -214,58 +361,149 @@ bool setupPrimaryStorage()
   primaryStorage = buildStorage(1);
   delay (STARTUP_DELAY);
 
-  if (!primaryStorage->isActive())
-  {
-    error("failure to start primary storage");
-    return false;
-  }
-
-  return true;
+  return primaryStorage->isActive();
 }
 
 bool setupSecondaryStorage()
 {
-  secondaryStorage = buildStorage(2);
-  return true;
+  secondaryStorage = buildStorage();
+  return secondaryStorage->open();
 }
 
-void writeData()
+/*
+ * function:    collectRaw
+ * description: Collects raw data from the sensors
+ * input(s):    collectedData * data, the struct to store the data
+ * output(s):   void
+ * author:      Samuel Hild
+ */
+void collectRaw(collectedData * data)
 {
-  String message =  (String(millis()) + ", ") + 
-                    (String(freeRam()) + ", ") + 
-                    (String(current) + ", ") + 
-                    (String(altimeter->readAltitude()) + ", ") +
-                    (String(altimeter->readPressure()) + ", ") + 
-                    (String(altimeter->readTemperature()) + ", ");
-  
-  if (!programmingMode)
-    message += (String(lipo.voltage()) + ", ")+(String(lipo.current(AVG)) + ", ") + (String(lipo.capacity(REMAIN)) + ", ");
-  message += (String(analogRead(MAIN_READ)) + ", ") + (String(analogRead(DROGUE_READ)) + ", \n");
+  debug(F("start collecting data"));
+
+  data->timestamp = millis();
+  (data->number)++;
+
+  if (RADIO_ENABLE) Serial.println(data->number);
+
+  data->altitude = altimeter->readAltitude();
+  data->pressure = altimeter->readPressure();
+  data->tempurature = altimeter->readTemperature();
+
+  data->ram = freeRam();
+  data->mainVoltage = analogRead(MAIN_READ);
+  data->drogueVoltage = analogRead(DROGUE_READ);
+
+  data->lipoVoltage = (programmingMode) ? 3.6 : lipo.voltage();
+  data->lipoCurrent = (programmingMode) ? 0.040 : lipo.current(AVG);
+  data->lipoCapacity = (programmingMode) ? 1900 : lipo.capacity(REMAIN);
+
+  return;
+}
+
+void writeData(collectedData * data)
+{
+
+  debug(F("writing data to sd card"));
+
+  writeDataEEPROM(data);
+
+  const char * message = dataToCStr(data);
 
   if (primaryStorage->isActive())
-    primaryStorage->write(message.c_str());
+    primaryStorage->write(message);
+    
   else if (RADIO_ENABLE)
     Serial.print(message);
 
-  uint32_t timestamp = millis();  
-  uint32_t altitude = altimeter->readAltitude();
-  uint16_t ram = freeRam();
-  uint8_t voltage = lipo.voltage();
-  uint8_t cont1 = analogRead(MAIN_READ) / 100;
-  uint8_t cont2 = analogRead(DROGUE_READ) / 100;
-
-  if (!RADIO_ENABLE)
-    debug("DATA PACKET");
-
-  Serial.print(timestamp);
-  Serial.print(altitude);
-  Serial.print(ram);
-  Serial.print(voltage);
-  Serial.print(cont1);
-  Serial.print(cont2);
-
-  if (!RADIO_ENABLE)
-    Serial.println();
+  debug(F("writing data to sd card"));
 
   return;
+}
+
+/*
+ * function:    transmitTelemetry
+ * description: Transmits data over the radio
+ * input(s):    collectedData * data, the data to transmit
+ * output(s):   void
+ * author:      Samuel Hild
+ */
+void transmitTelemetry(collectedData * data)
+{
+  if (RADIO_ENABLE)
+    debug(F("DATA PACKET: "));
+
+  Serial.print(data->timestamp);
+  Serial.print(",");
+  Serial.print((uint32_t) data->pressure);
+  Serial.print(",");
+  Serial.print((uint16_t) data->ram);
+  Serial.print(",");
+  Serial.print((uint8_t) data->lipoVoltage);
+  Serial.print(",");
+  Serial.print((uint8_t) (data->mainVoltage / 100));
+  Serial.print(",");
+  Serial.print((uint8_t) (data->drogueVoltage / 100));
+
+  Serial.println();
+
+  if (RADIO_ENABLE)
+    Serial.print("\n\n");
+  
+  return;
+}
+
+/*
+ * function:    healthCheck2
+ * description: checks the status of the device after setup
+ * input(s):    void
+ * output(s):   bool success, shows whether the device is operational
+ * author:      Samuel Hild
+ */
+bool healthCheck2()
+{
+  // Check continuity
+  debug(F("verify drogue"));
+  digitalWrite(DROGUE_LED, (analogRead(DROGUE_READ) < 500) ? HIGH : LOW);
+
+  debug(F("verify main"));
+  digitalWrite(MAIN_LED, (analogRead(MAIN_READ) < 500) ? HIGH : LOW);
+
+  // take test Reading
+  collectRaw(&currentData);
+
+  if (RADIO_ENABLE)
+  {
+    debug(F("dump initial data"));
+
+    Serial.println(currentData.timestamp);
+    Serial.println(currentData.number);
+
+    Serial.println(currentData.altitude);
+    Serial.println(currentData.pressure);
+    Serial.println(currentData.tempurature);
+
+    Serial.println(currentData.ram);
+    Serial.println(currentData.mainVoltage);
+    Serial.println(currentData.drogueVoltage);
+
+    Serial.println(currentData.lipoVoltage);
+    Serial.println(currentData.lipoCurrent);
+    Serial.println(currentData.lipoCapacity);
+  }  
+
+  if (currentData.pressure < 0 || currentData.pressure == ERRANT_PRESSUE)
+    error(F("pressure error"));
+
+  return true;
+}
+
+void writeDataEEPROM(collectedData * data)
+{
+  debug(F("storing in EEPROM"));
+
+  EEPROM.put(0, altimeter->getMaxAltitude());
+  EEPROM.put(sizeof(float), * data);
+
+  debug(F("end collecting data"));
 }
