@@ -37,8 +37,7 @@ Runmode current;
 
 collectedData previousData;
 collectedData currentData;
-collectedData predictedData;  //  Unused for now
-                              // Saved for Kalman
+
 uint32_t liftoffTime = 0;
 uint32_t framCounter = 0;
 float framRate = 0;
