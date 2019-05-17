@@ -97,7 +97,6 @@ void blink(int);
 
 int freeRam();
 
-const char * dataToCStr(collectedData *);
 void dataCopy(collectedData *, collectedData *);
 
 void clearEEPROM();

@@ -28,8 +28,6 @@ void fatal (const __FlashStringHelper * message)
   digitalWrite(ERROR_LED, HIGH);
 
   for (;;);   // halt the system
-
-  
 }
 
 /*
@@ -51,8 +49,6 @@ void error (const __FlashStringHelper * message)
   // blink ERROR_LED twice
   blink(ERROR_LED);
   blink(ERROR_LED);
-
-  
 }
 
 /*
@@ -71,8 +67,6 @@ void alert(const __FlashStringHelper * message)
     Serial.print(F(" - [**] alert: "));
     Serial.println(message);
   }
-
-  
 }
 
 /*
@@ -91,7 +85,6 @@ void debug(const __FlashStringHelper * message)
     Serial.print(F(" - [@@] debug: "));
     Serial.println(message);
   }
-  
 }
 
 /*
@@ -107,8 +100,6 @@ void blink(int led)
   delay(100);
   digitalWrite(led, LOW);
   delay(100);
-
-  
 }
 
 
@@ -128,38 +119,43 @@ int freeRam()
 }
 
 /*
- * function:    dataToCStr
- * description: Converts the data struct to a c string
- *              I like to think this function doesn't exist
- * input(s):    collectedData * data, the data to convert to string
- * output(s):   const char * message, the data converted to a string
+ * function:    clearEEPROM
+ * description: clears all data from the EEPROM
+ * input(s):    void
+ * output(s):   void
  * author:      Samuel Hild
  */
-const char * dataToCStr(collectedData * data)
-{
-  // Given more time I would perfer not to use arduino strings for this task
-  // but I decided the potential performance risks were worth the time saved
-  // by using them.
-  String temp = (String(data->timestamp) + ",") + 
-                (String(data->altitude) + ",") + 
-                (String(data->pressure) + ",") + 
-                (String(data->tempurature) + ",") +
-                (String(data->ram) + ",") +
-                (String(data->mainVoltage) + ",") +
-                (String(data->drogueVoltage) + ",") +
-                (String(data->lipoVoltage) + ",") +
-                (String(data->lipoCurrent) + ",") +
-                (String(data->lipoCapacity) + "\n");
-
-  const char * message = temp.c_str();
-
-  return message;
-}
-
 void clearEEPROM()
 {
   for (unsigned int i = 0; i < EEPROM.length(); i++)
-  {
     EEPROM.write(i, 0);
-  }
+}
+
+/*
+ * function:    dataCopy
+ * description: copy data from two data structures
+ * input(s):    collectedData * to, the data structure to copy to
+ *              collectedData * from, the data structure to copy from
+ * output(s):   void
+ * author:      Samuel Hild
+ */
+void dataCopy(collectedData * to, collectedData * from)
+{
+  to->timestamp = from->timestamp;
+  to->number = from->number;
+
+  to->altitude = from->altitude;
+  to->pressure = from->pressure;
+  to->tempurature = from->tempurature;
+
+  to->velocity = from->velocity;
+  to->acceleration = from->acceleration;
+
+  to->ram = from->ram;
+  to->mainVoltage = from->mainVoltage;
+  to->drogueVoltage = from->drogueVoltage;
+
+  to->lipoVoltage = from->lipoVoltage;
+  to->lipoCurrent = from->lipoCurrent;
+  to->lipoCapacity = from->lipoCapacity;
 }

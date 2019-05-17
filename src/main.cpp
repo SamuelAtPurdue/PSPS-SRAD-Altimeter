@@ -25,6 +25,7 @@ void writeData(collectedData *);
 void transmitTelemetry(collectedData *);
 void writeDataEEPROM(collectedData *);
 void framWrite(collectedData *);
+void writeFloat(float, int = 0, bool = false);
 
 float calculateVelocity(collectedData *, collectedData *);
 
@@ -434,18 +435,25 @@ void writeData(collectedData * data)
 
   debug(F("writing data to sd card"));
 
-  // Assemble the string to store
-  const char * message = dataToCStr(data);
+  if(primaryStorage->isActive())
+  {
+    writeFloat(data->timestamp);
 
-  if (primaryStorage->isActive())
-    primaryStorage->write(message);
-    
-  else if (RADIO_ENABLE)
-    Serial.print(message);
+    writeFloat(data->altitude, 2);
+    writeFloat(data->pressure, 2);
+    writeFloat(data->tempurature, 1);
+    writeFloat(data->velocity, 2);
+
+    writeFloat(data->ram);
+    writeFloat(data->mainVoltage);
+    writeFloat(data->drogueVoltage);
+
+    writeFloat(data->lipoCurrent, 2);
+    writeFloat(data->lipoVoltage, 2);
+    writeFloat(data->lipoCapacity, 2, true);
+  }
 
   debug(F("data writen to sd card"));
-
-  
 }
 
 /*
@@ -602,23 +610,12 @@ float calculateVelocity(collectedData * previous, collectedData * recent)
   return velocity;
 }
 
-void dataCopy(collectedData * to, collectedData * from)
+void writeFloat(float num, int precision, bool end)
 {
-  to->timestamp = from->timestamp;
-  to->number = from->number;
+  char buffer[25];
+  char * writeData;
 
-  to->altitude = from->altitude;
-  to->pressure = from->pressure;
-  to->tempurature = from->tempurature;
-
-  to->velocity = from->velocity;
-  to->acceleration = from->acceleration;
-
-  to->ram = from->ram;
-  to->mainVoltage = from->mainVoltage;
-  to->drogueVoltage = from->drogueVoltage;
-
-  to->lipoVoltage = from->lipoVoltage;
-  to->lipoCurrent = from->lipoCurrent;
-  to->lipoCapacity = from->lipoCapacity;
+  writeData = dtostrf(num, 1, precision, buffer);
+  primaryStorage->write(writeData);
+  primaryStorage->write((end) ? "\n" : ",");
 }
