@@ -24,17 +24,25 @@ void collectRaw(collectedData *);
 void writeData(collectedData *);
 void transmitTelemetry(collectedData *);
 void writeDataEEPROM(collectedData *);
+void framWrite(collectedData *);
+
+float calculateVelocity(collectedData *, collectedData *);
+
 
 Altimeter * altimeter;
 Storage * primaryStorage;
 Storage * secondaryStorage;
 Runmode current;
 
-bool programmingMode = false;
 collectedData previousData;
 collectedData currentData;
 collectedData predictedData;  //  Unused for now
+                              // Saved for Kalman
 uint32_t liftoffTime = 0;
+uint32_t framCounter = 0;
+float framRate = 0;
+
+bool programmingMode = false;
 
 /*
  * function:	     setup()
@@ -92,6 +100,13 @@ void setup()
   currentData.velocity = 0;
   currentData.acceleration = 0;
 
+  while (currentData.pressure < 0 || currentData.pressure == ERRANT_PRESSUE)
+  {
+    error(F("pressure error"));
+    delay(500);
+  }
+
+  delay (500);
   current = Runmode::PREFLIGHT;
 }
 
@@ -109,7 +124,10 @@ void loop()
   debug(F("loop begin"));
 
   collectRaw(&currentData);
+  currentData.velocity = calculateVelocity(&currentData, &previousData);
+  writeDataEEPROM(&currentData);
   writeData(&currentData);
+  if (programmingMode) framWrite(&currentData);
   transmitTelemetry(&currentData);
   
   switch (current)
@@ -120,7 +138,8 @@ void loop()
         (currentData.acceleration >= LAUNCH_ACCELERATION_THRESHOLD))
         {
           liftoffTime = currentData.timestamp;
-          current = Runmode::BURN;  
+          current = Runmode::BURN;
+          framRate = BURN_SAMPLE_RATE;  
           break;    // Skips over the delay
         }
 
@@ -131,9 +150,9 @@ void loop()
       if (currentData.acceleration <= 0 || currentData.timestamp > (liftoffTime + BURN_TIME_THRESHOLD))
       {
         current = Runmode::ASCENT;
+        framRate = ASCENT_SAMPLE_RATE;
       }
 
-      //TODO: Add FRAM Loop
       break;
 
     case Runmode::ASCENT :
@@ -141,7 +160,6 @@ void loop()
       {
         current = Runmode::APOGEE;
       }
-      // TODO: Add FRAM loop
       break;
 
     case Runmode::APOGEE :
@@ -160,8 +178,6 @@ void loop()
         
         current = Runmode::DROGUE;
       }
-
-      //TODO: FRAM
       
       break;
 
@@ -181,8 +197,6 @@ void loop()
 
         current = Runmode::MAIN;
       }
-
-      //TODO: FRAM
 
       break;
 
@@ -204,9 +218,8 @@ void loop()
       // final Reading
       collectRaw(&currentData);
       writeData(&currentData);
+      framWrite(&currentData);
       transmitTelemetry(&currentData);
-
-      // TODO: final fram reading
 
       alert (F("end of flight detected"));
       digitalWrite(LOOP_LED, LOW);
@@ -225,6 +238,12 @@ void loop()
       break;
   }
 
+  if (framRate != 0 && currentData.timestamp >= framCounter)
+  {
+    framWrite(&currentData);
+    framCounter += 1000 / framRate;
+  }
+
   // Interupt Detection
   if (digitalRead(LOOP_STOP) == HIGH)
   {
@@ -240,6 +259,8 @@ void loop()
 
     for (;;);
   }
+
+  dataCopy(&previousData, &currentData);
 
   delay (REFRESH_RATE);
 }
@@ -266,13 +287,15 @@ void setupGpio()
   pinMode(SDCS, OUTPUT);
   pinMode(BMPCS, OUTPUT);
 
-  return;
+  
 }
 
 /*
  * function:    healthCheck1()
  * description: Performs an initial health check of the system
- * 
+ * input(s):    void
+ * output(s):   bool success, return true on success
+ * author:      Samuel Hild
  */
 bool healthCheck1()
 {
@@ -396,18 +419,22 @@ void collectRaw(collectedData * data)
 
   data->lipoVoltage = (programmingMode) ? 3.6 : lipo.voltage();
   data->lipoCurrent = (programmingMode) ? 0.040 : lipo.current(AVG);
-  data->lipoCapacity = (programmingMode) ? 1900 : lipo.capacity(REMAIN);
-
-  return;
+  data->lipoCapacity = (programmingMode) ? 1900 : lipo.capacity(REMAIN);  
 }
 
+/*
+ * function:    writeData
+ * description: writes data to primary storage
+ * input(s):    collectedData * data, the datastructure to store
+ * output(s):   void
+ * author:      Samuel Hild
+ */
 void writeData(collectedData * data)
 {
 
   debug(F("writing data to sd card"));
 
-  writeDataEEPROM(data);
-
+  // Assemble the string to store
   const char * message = dataToCStr(data);
 
   if (primaryStorage->isActive())
@@ -416,9 +443,9 @@ void writeData(collectedData * data)
   else if (RADIO_ENABLE)
     Serial.print(message);
 
-  debug(F("writing data to sd card"));
+  debug(F("data writen to sd card"));
 
-  return;
+  
 }
 
 /*
@@ -433,7 +460,7 @@ void transmitTelemetry(collectedData * data)
   if (RADIO_ENABLE)
     debug(F("DATA PACKET: "));
 
-  Serial.print(data->timestamp);
+  Serial.print((uint32_t) data->timestamp);
   Serial.print(",");
   Serial.print((uint32_t) data->pressure);
   Serial.print(",");
@@ -450,7 +477,7 @@ void transmitTelemetry(collectedData * data)
   if (RADIO_ENABLE)
     Serial.print("\n\n");
   
-  return;
+  
 }
 
 /*
@@ -506,4 +533,92 @@ void writeDataEEPROM(collectedData * data)
   EEPROM.put(sizeof(float), * data);
 
   debug(F("end collecting data"));
+}
+
+void framWrite(collectedData * data)
+{
+  debug(F("Writing to Fram"));
+
+  uint8_t temp = 0x00;
+  if(RADIO_ENABLE) Serial.println((uint16_t) data->timestamp);
+
+  for (int i = sizeof(uint32_t) - sizeof(uint8_t); i >= 0; i-=1)
+  {
+    temp = (uint8_t) (((uint32_t) data->timestamp) >> i*8);
+    secondaryStorage->write(temp);
+
+    if (RADIO_ENABLE) Serial.print(temp, HEX);
+    temp = 0x00;
+  }
+  
+  if (RADIO_ENABLE) Serial.println();
+
+  secondaryStorage->write((uint8_t) ',');
+  if(RADIO_ENABLE) Serial.println((uint32_t) data->pressure);
+  for (int i = sizeof(uint32_t) - sizeof(uint8_t); i >= 0; i-=1)
+  {
+    temp = ((uint32_t) data->pressure) >> i*8;
+    secondaryStorage->write(temp);
+
+    if (RADIO_ENABLE) Serial.print(temp, HEX);
+    temp = 0x00;
+  }
+
+  if (RADIO_ENABLE) Serial.println();
+
+  secondaryStorage->write((uint8_t)',');
+  if(RADIO_ENABLE) Serial.println((uint16_t) data->ram);
+  for (int i = sizeof(uint16_t) - sizeof(uint8_t); i >= 0; i-=1)
+  {
+    temp = ((uint16_t) data->ram) >> i*8;
+    secondaryStorage->write(temp);
+
+    if (RADIO_ENABLE) Serial.print(temp, HEX);
+    temp = 0x00;
+  }
+
+  if (RADIO_ENABLE) Serial.println();
+
+  secondaryStorage->write((uint8_t)',');
+  secondaryStorage->write((uint8_t) data->lipoVoltage);
+
+  secondaryStorage->write((uint8_t)',');
+  secondaryStorage->write((uint8_t) (data->mainVoltage / 100));
+
+  secondaryStorage->write((uint8_t)',');
+  secondaryStorage->write((uint8_t) (data->drogueVoltage / 100));
+  secondaryStorage->write((uint8_t)'\n');
+}
+
+float calculateVelocity(collectedData * previous, collectedData * recent)
+{
+  float deltaT = (float) (recent->timestamp - previous->timestamp) / 1000.0;
+  float deltaH = (float) ((round(recent->altitude)) - (round(previous->altitude)));
+  float velocity = deltaH / deltaT;
+
+  debug(F("Calculated Velocity"));
+  if (RADIO_ENABLE) Serial.println(velocity);
+
+  return velocity;
+}
+
+void dataCopy(collectedData * to, collectedData * from)
+{
+  to->timestamp = from->timestamp;
+  to->number = from->number;
+
+  to->altitude = from->altitude;
+  to->pressure = from->pressure;
+  to->tempurature = from->tempurature;
+
+  to->velocity = from->velocity;
+  to->acceleration = from->acceleration;
+
+  to->ram = from->ram;
+  to->mainVoltage = from->mainVoltage;
+  to->drogueVoltage = from->drogueVoltage;
+
+  to->lipoVoltage = from->lipoVoltage;
+  to->lipoCurrent = from->lipoCurrent;
+  to->lipoCapacity = from->lipoCapacity;
 }

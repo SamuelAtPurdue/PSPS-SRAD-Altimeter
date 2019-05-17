@@ -27,11 +27,14 @@
 #define STARTUP_DELAY 15
 #define STARTUP_CONST 1
 #define DEPLOY_DELAY 500
+#define BURN_SAMPLE_RATE 5
+#define ASCENT_SAMPLE_RATE 0.25
 
 // Sensor Settings
 #define BATTERY_CAPACITY 500
 #define PACKET_SIZE 104
 #define ERRANT_PRESSUE -1
+#define FRAM_SIZE 8192
 
 // Threshold Values
 #define LAUNCH_ALTITUDE_THRESHOLD 100
@@ -93,6 +96,8 @@ void debug (const __FlashStringHelper *);
 void blink(int);
 
 int freeRam();
+
 const char * dataToCStr(collectedData *);
+void dataCopy(collectedData *, collectedData *);
 
 void clearEEPROM();

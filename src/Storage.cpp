@@ -44,6 +44,11 @@ public:
     datafile.print(data);
   }
 
+  void write(uint8_t data) override
+  {
+    datafile.print(data);
+  }
+
   void close() override
   {
     datafile.close();
@@ -52,7 +57,6 @@ public:
   {
     return active;
   }
-  ~SdStorage() {}
 };
 
 /*
@@ -64,7 +68,7 @@ class FramStorage : public Storage
 {
 private:
   Adafruit_FRAM_SPI fram = Adafruit_FRAM_SPI(FRAMCS);
-  uint32_t previousAddress = 0x01;
+  uint32_t previousAddress = 0x00;
   bool active = false;
 
 protected:
@@ -73,8 +77,35 @@ public:
 
   bool open()
   {
-    return active = fram.begin();
+    active = fram.begin();
+    debug(F("fram dump:"));
+    if (active)
+    {
+      uint8_t read;
+      for (int i = 0; i < FRAM_SIZE; i++)
+      {
+        read = fram.read8(i);
+
+        if (!((i + 1) % 19))
+        {
+          Serial.println();
+        }
+        else
+        {
+          Serial.print("0x");
+        
+          if (read < 0x10)
+            Serial.print(F("0"));
+
+          Serial.print(read, HEX);
+          Serial.print(F(" "));
+        }
+      }
+      if(RADIO_ENABLE) Serial.println();
+    }
+    return active;
   }
+  
   void write(const char * data)
   {
 
@@ -91,6 +122,15 @@ public:
     }
     fram.writeEnable(false);
   }
+
+  void write (uint8_t data)
+  {
+    fram.writeEnable(true);
+    fram.write8(previousAddress, data);
+    previousAddress += sizeof(uint8_t);
+    fram.writeEnable(false);
+  }
+
   void close()
   {
     /* Not needed */

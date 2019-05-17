@@ -29,7 +29,7 @@ void fatal (const __FlashStringHelper * message)
 
   for (;;);   // halt the system
 
-  return;
+  
 }
 
 /*
@@ -52,7 +52,7 @@ void error (const __FlashStringHelper * message)
   blink(ERROR_LED);
   blink(ERROR_LED);
 
-  return;
+  
 }
 
 /*
@@ -72,7 +72,7 @@ void alert(const __FlashStringHelper * message)
     Serial.println(message);
   }
 
-  return;
+  
 }
 
 /*
@@ -91,7 +91,7 @@ void debug(const __FlashStringHelper * message)
     Serial.print(F(" - [@@] debug: "));
     Serial.println(message);
   }
-  return;
+  
 }
 
 /*
@@ -108,7 +108,7 @@ void blink(int led)
   digitalWrite(led, LOW);
   delay(100);
 
-  return;
+  
 }
 
 

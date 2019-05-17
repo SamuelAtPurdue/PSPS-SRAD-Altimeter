@@ -16,7 +16,9 @@ private:
 protected:
 public:
   virtual bool open() = 0;
+  
   virtual void write(const char *) = 0;
+  virtual void write(uint8_t) = 0;
 
   virtual void close() = 0;
   virtual bool isActive() = 0;
