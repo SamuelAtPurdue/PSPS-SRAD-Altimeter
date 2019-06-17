@@ -47,8 +47,7 @@
 #define ZERO_THRESHOLD 0
 
 // Debug
-#define RADIO_ENABLE 1
-
+#define RADIO_ENABLE 0
 
 /*
  * enum:        Runmode

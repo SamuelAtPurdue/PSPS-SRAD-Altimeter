@@ -34,7 +34,7 @@ bool Adafruit_BMP280::begin(uint8_t a, uint8_t chipid) {
     SPI.begin();
   }
   delay(500);
-  Serial.println(read8(BMP280_REGISTER_CHIPID));
+  //Serial.println(read8(BMP280_REGISTER_CHIPID));
   if (read8(BMP280_REGISTER_CHIPID) != chipid)
   {
     SPI.end();

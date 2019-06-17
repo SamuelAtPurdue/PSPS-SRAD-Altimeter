@@ -12,6 +12,8 @@
 
 #define FILENAME "data.txt"
 
+bool programmingMode = false;
+
 /*
  * interface:	  SdStorage
  * description: class for SD card storage
@@ -79,7 +81,7 @@ public:
   {
     active = fram.begin();
     debug(F("fram dump:"));
-    if (active)
+    if (active && programmingMode)
     {
       uint8_t read;
       for (int i = 0; i < FRAM_SIZE; i++)

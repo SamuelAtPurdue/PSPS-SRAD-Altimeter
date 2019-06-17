@@ -42,7 +42,7 @@ uint32_t liftoffTime = 0;
 uint32_t framCounter = 0;
 float framRate = 0;
 
-bool programmingMode = false;
+extern bool programmingMode;
 
 /*
  * function:	     setup()
@@ -78,6 +78,19 @@ void setup()
       break;
     }
     delay (STARTUP_DELAY);
+  }
+
+  if (programmingMode)
+  {
+    debug(F("begin EEPROM dump"));
+
+    for (unsigned int i = 0; i < EEPROM.length(); i++)
+    {
+      Serial.print(F("0x"));
+      Serial.print(EEPROM.read(i), HEX);
+      Serial.print(F(" "));
+    }
+    Serial.println();
   }
 
   // Setup Altimeter
@@ -302,16 +315,6 @@ bool healthCheck1()
 
   debug(F("begin startup"));
 
-  debug(F("begin EEPROM dump"));
-
-  for (unsigned int i = 0; i < EEPROM.length(); i++)
-  {
-    Serial.print(F("0x"));
-    Serial.print(EEPROM.read(i), HEX);
-    Serial.print(F(" "));
-  }
-  Serial.println();
-
   // Check Leds
   for (int i = 0; i < 4; i++)
   {
@@ -496,6 +499,8 @@ void transmitTelemetry(collectedData * data)
  */
 bool healthCheck2()
 {
+
+
   // Check continuity
   debug(F("verify drogue"));
   digitalWrite(DROGUE_LED, (analogRead(DROGUE_READ) < 500) ? HIGH : LOW);
