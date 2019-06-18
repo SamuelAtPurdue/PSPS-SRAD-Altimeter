@@ -138,9 +138,11 @@ void loop()
 
   collectRaw(&currentData);
   currentData.velocity = calculateVelocity(&currentData, &previousData);
+
   writeDataEEPROM(&currentData);
   writeData(&currentData);
   if (programmingMode) framWrite(&currentData);
+  
   transmitTelemetry(&currentData);
   
   switch (current)
@@ -474,6 +476,8 @@ void transmitTelemetry(collectedData * data)
   Serial.print(",");
   Serial.print((uint32_t) data->pressure);
   Serial.print(",");
+  Serial.print((uint8_t) data->tempurature);
+  Serial.print(",");
   Serial.print((uint16_t) data->ram);
   Serial.print(",");
   Serial.print((uint8_t) data->lipoVoltage);
@@ -567,6 +571,7 @@ void framWrite(collectedData * data)
 
   secondaryStorage->write((uint8_t) ',');
   if(RADIO_ENABLE) Serial.println((uint32_t) data->pressure);
+
   for (int i = sizeof(uint32_t) - sizeof(uint8_t); i >= 0; i-=1)
   {
     temp = ((uint32_t) data->pressure) >> i*8;
@@ -580,6 +585,7 @@ void framWrite(collectedData * data)
 
   secondaryStorage->write((uint8_t)',');
   if(RADIO_ENABLE) Serial.println((uint16_t) data->ram);
+
   for (int i = sizeof(uint16_t) - sizeof(uint8_t); i >= 0; i-=1)
   {
     temp = ((uint16_t) data->ram) >> i*8;
