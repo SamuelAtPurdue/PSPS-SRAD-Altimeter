@@ -115,8 +115,10 @@ void setup()
 
   while (currentData.pressure < 0 || currentData.pressure == ERRANT_PRESSUE)
   {
+    collectRaw(&currentData);
+    transmitTelemetry(&currentData);
     error(F("pressure error"));
-    delay(500);
+    delay(1000);
   }
 
   delay (500);
